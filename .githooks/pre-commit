@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+# project-preset: FINAL_CHECK at commit level - run the gate against the staged tree.
+# Bypass deliberately with: git commit --no-verify
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+gate="$root/.agents/bin/precheck.sh"
+
+if [ ! -f "$gate" ]; then
+  printf 'project-preset: %s missing - commit not gated (run .agents/bin/doctor.sh or reinstall)\n' "$gate" >&2
+  exit 0
+fi
+
+# Gate ko bash chahiye. Fail closed: bina gate ka commit hi secrets leak hone ka raasta hai.
+if ! command -v bash >/dev/null 2>&1; then
+  printf 'project-preset: bash is not installed, so the commit gate cannot run.\n' >&2
+  printf '  install bash (e.g. apk add bash / apt install bash), or bypass knowingly: git commit --no-verify\n' >&2
+  exit 1
+fi
+
+exec bash "$gate" --staged

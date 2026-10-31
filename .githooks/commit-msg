@@ -1,0 +1,48 @@
+#!/usr/bin/env sh
+# project-preset: check the commit message shape (rule THR-22).
+#
+# Warning by default, because a message convention is a team decision.
+# Set PRESET_ENFORCE_COMMITS=1 (or the older OSS_ENFORCE_COMMITS=1) to make a
+# non-conventional subject block the commit.
+
+msg_file=$1
+[ -f "$msg_file" ] || exit 0
+
+subject=$(grep -vE '^#|^[[:space:]]*$' "$msg_file" | head -1 | tr -d '\r')
+
+# Git ke apne banaye messages (merge, revert, fixup) ko jaane do.
+case "$subject" in
+  'Merge '*|'Revert '*|fixup!*|squash!*|amend!*) exit 0 ;;
+esac
+
+if [ -z "$subject" ]; then
+  printf 'commit-msg: empty commit message\n' >&2
+  exit 1
+fi
+
+enforce=${PRESET_ENFORCE_COMMITS:-${OSS_ENFORCE_COMMITS:-0}}
+shape='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert|security)(\([a-z0-9._/-]+\))?!?: .+'
+
+if ! printf '%s' "$subject" | grep -qE "$shape"; then
+  printf 'commit-msg: not a conventional subject\n' >&2
+  printf '  got: %s\n' "$subject" >&2
+  printf '  want: type(scope): imperative summary   e.g. fix(parser): reject unterminated strings\n' >&2
+  [ "$enforce" = "1" ] && exit 1
+else
+  summary=${subject#*: }
+  if [ "${#summary}" -lt 8 ]; then
+    printf 'commit-msg: summary is %s characters - say what changed, e.g. "%s"\n' \
+      "${#summary}" "add retry to the deploy poller" >&2
+  fi
+  case "$subject" in
+    *': update'|*': updates'|*': fix'|*': wip'|*': final'|*': changes'|*': stuff')
+      printf 'commit-msg: "%s" does not describe the change - name the behaviour\n' "$subject" >&2 ;;
+  esac
+fi
+
+len=$(printf '%s' "$subject" | wc -c | tr -d ' ')
+if [ "$len" -gt 72 ]; then
+  printf 'commit-msg: subject is %s characters, aim for 72 or fewer\n' "$len" >&2
+fi
+
+exit 0

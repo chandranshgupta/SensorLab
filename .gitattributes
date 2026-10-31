@@ -1,0 +1,5 @@
+# project-preset: keep shell scripts LF
+*.sh text eol=lf
+.githooks/* text eol=lf
+*.cmd text eol=crlf
+*.bat text eol=crlf
