@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>SensorLab - Phone Sensor Streamer</title>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card: #161b22;
+      --border: #30363d;
+      --accent: #58a6ff;
+      --text: #f0f6fc;
+      --dim: #8b949e;
+      --green: #3fb950;
+      --red: #f85149;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1.5rem;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      gap: 1.2rem;
+    }
+    header {
+      text-align: center;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+    h1 { font-size: 1.4rem; color: var(--accent); }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 999px;
+      font-size: 0.85rem;
+      background: #21262d;
+      margin-top: 0.5rem;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--red);
+    }
+    .dot.connected { background: var(--green); }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .card-title {
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--dim);
+    }
+    .readings {
+      font-family: monospace;
+      font-size: 1.1rem;
+      display: flex;
+      justify-content: space-around;
+      background: #090d13;
+      padding: 0.75rem;
+      border-radius: 8px;
+    }
+    .reading-col {
+      text-align: center;
+    }
+    .reading-col span {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--dim);
+    }
+    button {
+      background: var(--accent);
+      color: #0d1117;
+      border: none;
+      padding: 0.9rem;
+      border-radius: 10px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: opacity 0.2s;
+    }
+    button:active { opacity: 0.8; }
+    button.stop {
+      background: var(--red);
+      color: white;
+    }
+    .rate-indicator {
+      font-size: 0.8rem;
+      color: var(--dim);
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SensorLab Mobile</h1>
+    <div class="status-pill">
+      <div id="statusDot" class="dot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </header>
+
+  <div class="card">
+    <div class="card-title">Orientation (Gyroscope)</div>
+    <div class="readings">
+      <div class="reading-col">
+        <span id="valAlpha">0.0</span>
+        <span>Alpha (&alpha;)</span>
+      </div>
+      <div class="reading-col">
+        <span id="valBeta">0.0</span>
+        <span>Beta (&beta;)</span>
+      </div>
+      <div class="reading-col">
+        <span id="valGamma">0.0</span>
+        <span>Gamma (&gamma;)</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Acceleration (Accelerometer)</div>
+    <div class="readings">
+      <div class="reading-col">
+        <span id="valX">0.00</span>
+        <span>X (m/s&sup2;)</span>
+      </div>
+      <div class="reading-col">
+        <span id="valY">0.00</span>
+        <span>Y (m/s&sup2;)</span>
+      </div>
+      <div class="reading-col">
+        <span id="valZ">0.00</span>
+        <span>Z (m/s&sup2;)</span>
+      </div>
+    </div>
+  </div>
+
+  <button id="toggleBtn">Start Motion Sensor</button>
+  <div id="rateText" class="rate-indicator">Sent: 0 frames</div>
+
+  <script>
+    // Mobile sensor streaming client
+    let ws = null;
+    let isStreaming = false;
+    let frameCount = 0;
+    let lastSent = 0;
+    const THROTTLE_MS = 40; // Max ~25 Hz streaming rate taaki network flood na ho
+
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const toggleBtn = document.getElementById('toggleBtn');
+    const rateText = document.getElementById('rateText');
+
+    const valAlpha = document.getElementById('valAlpha');
+    const valBeta = document.getElementById('valBeta');
+    const valGamma = document.getElementById('valGamma');
+    const valX = document.getElementById('valX');
+    const valY = document.getElementById('valY');
+    const valZ = document.getElementById('valZ');
+
+    function connectWebSocket() {
+      // Current page ke host se WebSocket connect karo
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}`;
+      ws = new WebSocket(wsUrl);
+
+      ws.onopen = () => {
+        statusDot.classList.add('connected');
+        statusText.textContent = 'Hub Connected';
+      };
+
+      ws.onclose = () => {
+        statusDot.classList.remove('connected');
+        statusText.textContent = 'Reconnecting...';
+        // Auto-reconnect retry karo
+        setTimeout(connectWebSocket, 2000);
+      };
+
+      ws.onerror = (err) => {
+        console.error('WebSocket error:', err);
+      };
+    }
+
+    // Protocol compliant frame bhejte hain
+    function sendPayload(sensorName, valuesArray) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+      const payload = {
+        source: 'phone',
+        sensor: sensorName,
+        values: valuesArray,
+        time: Math.floor(Date.now() / 1000)
+      };
+
+      ws.send(JSON.stringify(payload));
+      frameCount++;
+      rateText.textContent = `Sent: ${frameCount} frames`;
+    }
+
+    function handleOrientation(e) {
+      if (!isStreaming) return;
+      const now = performance.now();
+      if (now - lastSent < THROTTLE_MS) return;
+      lastSent = now;
+
+      const alpha = +(e.alpha || 0).toFixed(1);
+      const beta = +(e.beta || 0).toFixed(1);
+      const gamma = +(e.gamma || 0).toFixed(1);
+
+      valAlpha.textContent = alpha;
+      valBeta.textContent = beta;
+      valGamma.textContent = gamma;
+
+      sendPayload('orientation', [alpha, beta, gamma]);
+    }
+
+    function handleMotion(e) {
+      if (!isStreaming) return;
+      const acc = e.accelerationIncludingGravity || e.acceleration;
+      if (!acc) return;
+
+      const x = +(acc.x || 0).toFixed(2);
+      const y = +(acc.y || 0).toFixed(2);
+      const z = +(acc.z || 0).toFixed(2);
+
+      valX.textContent = x;
+      valY.textContent = y;
+      valZ.textContent = z;
+
+      sendPayload('accel', [x, y, z]);
+    }
+
+    async function startSensors() {
+      // iOS 13+ devices ke liye permission prompt handle karo
+      if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try {
+          const perm = await DeviceOrientationEvent.requestPermission();
+          if (perm !== 'granted') {
+            alert('Sensor permission denied');
+            return;
+          }
+        } catch (err) {
+          console.warn('Permission error:', err);
+        }
+      }
+
+      window.addEventListener('deviceorientation', handleOrientation);
+      window.addEventListener('devicemotion', handleMotion);
+
+      isStreaming = true;
+      toggleBtn.textContent = 'Stop Streaming';
+      toggleBtn.classList.add('stop');
+    }
+
+    function stopSensors() {
+      window.removeEventListener('deviceorientation', handleOrientation);
+      window.removeEventListener('devicemotion', handleMotion);
+      isStreaming = false;
+      toggleBtn.textContent = 'Start Motion Sensor';
+      toggleBtn.classList.remove('stop');
+    }
+
+    toggleBtn.addEventListener('click', () => {
+      if (isStreaming) {
+        stopSensors();
+      } else {
+        startSensors();
+      }
+    });
+
+    // Page load hone par connect karo
+    connectWebSocket();
+  </script>
+</body>
+</html>
+

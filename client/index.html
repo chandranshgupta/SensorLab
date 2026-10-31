@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SensorLab - 3D Digital Twin Visualizer</title>
+  <style>
+    :root {
+      --bg: #090d13;
+      --card-bg: rgba(22, 27, 34, 0.85);
+      --border: rgba(48, 54, 61, 0.8);
+      --accent: #58a6ff;
+      --accent-glow: rgba(88, 166, 255, 0.35);
+      --text: #f0f6fc;
+      --dim: #8b949e;
+      --green: #3fb950;
+      --purple: #bc8cff;
+      --orange: #f0883e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+    #canvas-container {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      z-index: 1;
+    }
+    .hud-overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 10;
+      display: grid;
+      grid-template-columns: 320px 1fr 340px;
+      grid-template-rows: auto 1fr auto;
+      padding: 1.2rem;
+      gap: 1rem;
+    }
+    .hud-header {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      padding: 0.8rem 1.4rem;
+      border-radius: 12px;
+      pointer-events: auto;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.8rem;
+    }
+    .brand h1 { font-size: 1.2rem; color: var(--accent); }
+    .badge {
+      font-size: 0.75rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 20px;
+      background: #21262d;
+      color: var(--dim);
+    }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.85rem;
+    }
+    .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      background: #f85149;
+    }
+    .dot.live { background: var(--green); box-shadow: 0 0 10px var(--green); }
+    .panel {
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      pointer-events: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.8rem;
+      overflow-y: auto;
+    }
+    .panel-title {
+      font-size: 0.85rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--dim);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.4rem;
+    }
+    .sensor-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.6rem;
+      background: #0d1117;
+      border-radius: 8px;
+      border-left: 3px solid var(--accent);
+    }
+    .sensor-item.sim { border-left-color: var(--purple); }
+    .sensor-item.board { border-left-color: var(--green); }
+    .sensor-item.phone { border-left-color: var(--orange); }
+    .sensor-name { font-weight: 600; font-size: 0.9rem; }
+    .sensor-sub { font-size: 0.75rem; color: var(--dim); }
+    .telemetry-feed {
+      font-family: monospace;
+      font-size: 0.8rem;
+      background: #090d13;
+      padding: 0.8rem;
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    .feed-line {
+      display: flex;
+      justify-content: space-between;
+      color: var(--dim);
+    }
+    .feed-line span.active { color: var(--accent); }
+    .hud-footer {
+      grid-column: 1 / -1;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--dim);
+      background: var(--card-bg);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 0.6rem 1.2rem;
+      border-radius: 8px;
+      pointer-events: auto;
+    }
+    .btn {
+      background: var(--accent);
+      color: #0d1117;
+      border: none;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn:hover { opacity: 0.9; }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+
+  <div class="hud-overlay">
+    <header class="hud-header">
+      <div class="brand">
+        <h1>SensorLab</h1>
+        <span class="badge">Arduino UNO Q Digital Twin</span>
+      </div>
+      <div class="status-pill">
+        <div id="statusDot" class="dot"></div>
+        <span id="statusText">Connecting to Telemetry Hub...</span>
+      </div>
+    </header>
+
+    <div class="panel">
+      <div class="panel-title">Active Sensor Sources</div>
+      <div id="sourceList" style="display: flex; flex-direction: column; gap: 0.6rem;">
+        <div class="sensor-item sim">
+          <div>
+            <div class="sensor-name">Software Simulator</div>
+            <div class="sensor-sub">Synthetic Drone Waveform</div>
+          </div>
+          <span class="badge" id="simBadge">Standby</span>
+        </div>
+        <div class="sensor-item phone">
+          <div>
+            <div class="sensor-name">Mobile Phone</div>
+            <div class="sensor-sub">Orientation & Accelerometer</div>
+          </div>
+          <span class="badge" id="phoneBadge">Waiting</span>
+        </div>
+        <div class="sensor-item board">
+          <div>
+            <div class="sensor-name">Arduino UNO Q</div>
+            <div class="sensor-sub">Hardware Board & LED Matrix</div>
+          </div>
+          <span class="badge" id="boardBadge">Offline</span>
+        </div>
+      </div>
+    </div>
+
+    <div></div> <!-- Empty middle column -->
+
+    <div class="panel">
+      <div class="panel-title">Live Telemetry HUD</div>
+      <div style="font-family: monospace; font-size: 0.95rem; display: flex; flex-direction: column; gap: 0.5rem;">
+        <div>Source: <span id="telemetrySource" style="color: var(--accent);">None</span></div>
+        <div>Sensor: <span id="telemetrySensor" style="color: var(--purple);">-</span></div>
+        <div style="background: #090d13; padding: 0.6rem; border-radius: 6px;">
+          Values: <span id="telemetryValues" style="color: var(--green);">[0.0, 0.0, 0.0]</span>
+        </div>
+        <div>Timestamp: <span id="telemetryTime" style="color: var(--dim);">-</span></div>
+      </div>
+
+      <div class="panel-title" style="margin-top: 0.8rem;">Recent Activity Stream</div>
+      <div id="activityFeed" class="telemetry-feed">
+        <div class="feed-line"><span>Waiting for sensor stream...</span></div>
+      </div>
+    </div>
+
+    <footer class="hud-footer">
+      <div>Hint: Click and drag to orbit 3D view &bull; Scroll to zoom</div>
+      <div id="phoneUrlHint">Phone sender URL: Loading...</div>
+    </footer>
+  </div>
+
+  <script src="/vendor/three.min.js"></script>
+  <script>
+    // Three.js 3D Scene setup
+    const container = document.getElementById('canvas-container');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x090d13);
+    scene.fog = new THREE.FogExp2(0x090d13, 0.04);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    camera.position.set(0, 7, 10);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0x58a6ff, 1.2);
+    dirLight.position.set(5, 12, 8);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    const pointLight = new THREE.PointLight(0x3fb950, 0.8, 15);
+    pointLight.position.set(-4, 3, -2);
+    scene.add(pointLight);
+
+    // Grid Floor
+    const gridHelper = new THREE.GridHelper(24, 24, 0x30363d, 0x161b22);
+    gridHelper.position.y = -1.5;
+    scene.add(gridHelper);
+
+    // Arduino UNO Q 3D Board Model (Low-Poly representation)
+    const boardGroup = new THREE.Group();
+    scene.add(boardGroup);
+
+    // PCB Board (Dark blue/teal rounded box)
+    const pcbGeo = new THREE.BoxGeometry(4.8, 0.25, 3.4);
+    const pcbMat = new THREE.MeshStandardMaterial({
+      color: 0x0e4749,
+      roughness: 0.4,
+      metalness: 0.2
+    });
+    const pcb = new THREE.Mesh(pcbGeo, pcbMat);
+    pcb.castShadow = true;
+    boardGroup.add(pcb);
+
+    // Main MPU/MCU Processor Chip
+    const chipGeo = new THREE.BoxGeometry(1.2, 0.15, 1.2);
+    const chipMat = new THREE.MeshStandardMaterial({ color: 0x161b22, roughness: 0.2, metalness: 0.8 });
+    const chip = new THREE.Mesh(chipGeo, chipMat);
+    chip.position.set(-0.8, 0.18, 0);
+    boardGroup.add(chip);
+
+    // 8x13 LED Matrix on board
+    const ledGroup = new THREE.Group();
+    const ledGeo = new THREE.BoxGeometry(0.12, 0.08, 0.12);
+    const ledOffMat = new THREE.MeshStandardMaterial({ color: 0x21262d, roughness: 0.8 });
+    const ledOnMat = new THREE.MeshBasicMaterial({ color: 0xf0883e });
+
+    const leds = [];
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 13; c++) {
+        const led = new THREE.Mesh(ledGeo, ledOffMat);
+        led.position.set(0.6 + (c - 6) * 0.18, 0.16, (r - 3.5) * 0.18);
+        ledGroup.add(led);
+        leds.push(led);
+      }
+    }
+    boardGroup.add(ledGroup);
+
+    // Orbiting Sensor Nodes
+    const sensorNodes = {
+      phone: createSensorNode(0xf0883e, 'Phone'),
+      sim: createSensorNode(0xbc8cff, 'Simulator'),
+      board: createSensorNode(0x3fb950, 'Board Sensor')
+    };
+
+    function createSensorNode(colorHex, name) {
+      const group = new THREE.Group();
+      const nodeGeo = new THREE.OctahedronGeometry(0.35);
+      const nodeMat = new THREE.MeshStandardMaterial({
+        color: colorHex,
+        emissive: colorHex,
+        emissiveIntensity: 0.4,
+        roughness: 0.3
+      });
+      const mesh = new THREE.Mesh(nodeGeo, nodeMat);
+      group.add(mesh);
+
+      // Connection pulse line board tak
+      const lineGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, 0)
+      ]);
+      const lineMat = new THREE.LineBasicMaterial({ color: colorHex, transparent: true, opacity: 0.25 });
+      const line = new THREE.Line(lineGeo, lineMat);
+      scene.add(line);
+
+      scene.add(group);
+      return { group, mesh, line, lastPulse: 0 };
+    }
+
+    // Camera Orbit drag interaction
+    let isDragging = false;
+    let prevMouseX = 0;
+    let prevMouseY = 0;
+    let spherical = { radius: 11, theta: 0.6, phi: 1.1 };
+
+    function updateCameraPosition() {
+      camera.position.x = spherical.radius * Math.sin(spherical.phi) * Math.sin(spherical.theta);
+      camera.position.y = spherical.radius * Math.cos(spherical.phi);
+      camera.position.z = spherical.radius * Math.sin(spherical.phi) * Math.cos(spherical.theta);
+      camera.lookAt(0, 0, 0);
+    }
+    updateCameraPosition();
+
+    window.addEventListener('mousedown', (e) => {
+      isDragging = true;
+      prevMouseX = e.clientX;
+      prevMouseY = e.clientY;
+    });
+    window.addEventListener('mouseup', () => { isDragging = false; });
+    window.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+      const dx = e.clientX - prevMouseX;
+      const dy = e.clientY - prevMouseY;
+      prevMouseX = e.clientX;
+      prevMouseY = e.clientY;
+
+      spherical.theta -= dx * 0.008;
+      spherical.phi = Math.max(0.1, Math.min(Math.PI / 2 - 0.05, spherical.phi - dy * 0.008));
+      updateCameraPosition();
+    });
+    window.addEventListener('wheel', (e) => {
+      spherical.radius = Math.max(5, Math.min(22, spherical.radius + e.deltaY * 0.01));
+      updateCameraPosition();
+    });
+
+    // Window Resize handling
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Telemetry UI Element References
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const telemetrySource = document.getElementById('telemetrySource');
+    const telemetrySensor = document.getElementById('telemetrySensor');
+    const telemetryValues = document.getElementById('telemetryValues');
+    const telemetryTime = document.getElementById('telemetryTime');
+    const activityFeed = document.getElementById('activityFeed');
+    const phoneUrlHint = document.getElementById('phoneUrlHint');
+
+    // Server IP fetch karo taaki footer mein address dikha sakein
+    fetch('/api/info')
+      .then(res => res.json())
+      .then(info => {
+        if (info.ips && info.ips.length > 0) {
+          phoneUrlHint.innerHTML = `Phone address: <strong style="color: var(--accent);">http://${info.ips[0].address}:${info.port}/phone</strong>`;
+        }
+      })
+      .catch(() => {});
+
+    // Target rotation angles for smooth interpolation
+    let targetRotX = 0;
+    let targetRotY = 0;
+    let targetRotZ = 0;
+
+    // WebSocket connection to Hub
+    let ws = null;
+    function connectHub() {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      ws = new WebSocket(`${protocol}//${window.location.host}`);
+
+      ws.onopen = () => {
+        statusDot.classList.add('live');
+        statusText.textContent = 'Hub Connected (Live)';
+      };
+
+      ws.onclose = () => {
+        statusDot.classList.remove('live');
+        statusText.textContent = 'Hub Disconnected (Reconnecting...)';
+        setTimeout(connectHub, 2000);
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'telemetry' && msg.data) {
+            handleTelemetry(msg.data);
+          }
+        } catch (err) {
+          console.error('Frame parse error:', err);
+        }
+      };
+    }
+
+    function handleTelemetry(data) {
+      telemetrySource.textContent = data.source;
+      telemetrySensor.textContent = data.sensor;
+      telemetryValues.textContent = `[${data.values.map(v => typeof v === 'number' ? v.toFixed(2) : v).join(', ')}]`;
+      telemetryTime.textContent = new Date(data.time * 1000).toLocaleTimeString();
+
+      // Badges update karo
+      const badge = document.getElementById(data.source + 'Badge');
+      if (badge) {
+        badge.textContent = 'Active';
+        badge.style.background = '#238636';
+        badge.style.color = '#fff';
+      }
+
+      // 3D rotation update (Phone orientation ya drone tilt)
+      if (data.sensor === 'orientation' && data.values.length >= 3) {
+        // [alpha, beta, gamma] degrees ko radians mein convert karo
+        const betaRad = (data.values[1] * Math.PI) / 180;
+        const gammaRad = (data.values[2] * Math.PI) / 180;
+        targetRotX = betaRad;
+        targetRotZ = -gammaRad;
+      } else if (data.sensor === 'accel' && data.values.length >= 3) {
+        // Accelerometer tilt estimation
+        targetRotX = (data.values[1] / 9.81) * 0.6;
+        targetRotZ = -(data.values[0] / 9.81) * 0.6;
+      }
+
+      // Sensor node pulse animate karo
+      if (sensorNodes[data.source]) {
+        sensorNodes[data.source].lastPulse = performance.now();
+      }
+
+      // Matrix LED animation simulate karo
+      const activeIdx = Math.floor(Math.random() * leds.length);
+      leds[activeIdx].material = ledOnMat;
+      setTimeout(() => { leds[activeIdx].material = ledOffMat; }, 300);
+
+      // Activity Feed append
+      const line = document.createElement('div');
+      line.className = 'feed-line';
+      line.innerHTML = `<span>${data.source}:${data.sensor}</span><span class="active">[${data.values.slice(0, 2).map(v => Number(v).toFixed(1)).join(',')}]</span>`;
+      activityFeed.prepend(line);
+      if (activityFeed.children.length > 8) {
+        activityFeed.removeChild(activityFeed.lastChild);
+      }
+    }
+
+    connectHub();
+
+    // Render loop
+    let clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const time = clock.getElapsedTime();
+
+      // Smooth damping interpolation (lerp) board rotation ke liye
+      boardGroup.rotation.x += (targetRotX - boardGroup.rotation.x) * 0.1;
+      boardGroup.rotation.z += (targetRotZ - boardGroup.rotation.z) * 0.1;
+
+      // Orbiting sensor nodes position update
+      const now = performance.now();
+      const sources = ['sim', 'phone', 'board'];
+      sources.forEach((key, idx) => {
+        const node = sensorNodes[key];
+        const angle = time * 0.5 + (idx * (Math.PI * 2 / 3));
+        const radius = 4.2;
+        const nx = Math.cos(angle) * radius;
+        const nz = Math.sin(angle) * radius;
+        const ny = Math.sin(time * 2 + idx) * 0.3;
+
+        node.group.position.set(nx, ny, nz);
+        node.mesh.rotation.x = time * 1.5;
+        node.mesh.rotation.y = time * 1.2;
+
+        // Line connect karo node se board tak
+        const positions = node.line.geometry.attributes.position.array;
+        positions[0] = nx; positions[1] = ny; positions[2] = nz;
+        positions[3] = boardGroup.position.x;
+        positions[4] = boardGroup.position.y;
+        positions[5] = boardGroup.position.z;
+        node.line.geometry.attributes.position.needsUpdate = true;
+
+        // Pulse intensity decay
+        const elapsedSincePulse = now - node.lastPulse;
+        if (elapsedSincePulse < 500) {
+          const pulseFactor = 1 - (elapsedSincePulse / 500);
+          node.line.material.opacity = 0.25 + pulseFactor * 0.75;
+          node.mesh.scale.setScalar(1 + pulseFactor * 0.4);
+        } else {
+          node.line.material.opacity = 0.2;
+          node.mesh.scale.setScalar(1);
+        }
+      });
+
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
+
