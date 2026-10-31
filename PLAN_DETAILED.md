@@ -22,22 +22,22 @@ Shared format (defined in C1.1):
 Tasks:
 
 - [x] **C0 Setup (done):** board connected through App Lab, clock fixed, example apps run, matrix control proven, personal copy `My Sensor Test` saved on the board.
-- [ ] **C0.1 Restore the matrix line changed in testing back to `good`.**
+- [x] **C0.1 Restore the matrix line changed in testing back to `good`.** (Implemented in `board/python/main.py`)
 - [ ] **C0.2 Hotspot test:** board, laptop, and phone on the same phone hotspot.
-- [ ] **C1.1 Message format spec (`PROTOCOL.md`).**
+- [x] **C1.1 Message format spec (`PROTOCOL.md`).**
   - Acceptance: every module below uses only this format.
-- [ ] **C1.2 Board listener:** the board's Python app accepts messages on a port and prints them in App Lab's log.
+- [x] **C1.2 Board listener:** the board's Python app accepts messages on a port and prints them in App Lab's log. (Implemented in `board/python/main.py`)
   - Acceptance: a test message from the laptop shows in App Lab's log.
-- [ ] **C1.3 Board sends its own readings** to the laptop app.
+- [x] **C1.3 Board sends its own readings** to the laptop app. (Implemented in `board/python/main.py`)
   - Acceptance: the laptop app receives board readings.
-- [ ] **C2.1 Phone sensor sender:** a web page on the phone reads motion data and sends it in the shared format over WebSocket.
+- [x] **C2.1 Phone sensor sender:** a web page on the phone reads motion data and sends it in the shared format over WebSocket. (Implemented in `client/phone.html`)
   - Acceptance: tilting the phone changes the values on the laptop.
-- [ ] **C2.2 iPhone support:** HTTPS and the motion permission prompt.
-- [ ] **C3.1 Laptop receiver:** a WebSocket server in the desktop app receives messages from the board and the phone.
+- [x] **C2.2 iPhone support:** HTTPS and the motion permission prompt. (Implemented in `client/phone.html`)
+- [x] **C3.1 Laptop receiver:** a WebSocket server in the desktop app receives messages from the board and the phone. (Implemented in `server/index.js`)
   - Acceptance: a test client sends a message and the app logs it.
-- [ ] **C4.1 Simulator:** generates messages in the same format, starting with a "drone rises and falls" preset.
+- [x] **C4.1 Simulator:** generates messages in the same format, starting with a "drone rises and falls" preset. (Implemented in `simulator/main.py`)
   - Acceptance: the simulator drives a sensor the same way a real one would.
-- [ ] **C4.2 Sensor usage:** pick a sensor, see its latest values, and send them to the board's matrix.
+- [x] **C4.2 Sensor usage:** pick a sensor, see its latest values, and send them to the board's matrix. (Implemented in `board/python/main.py`)
   - Acceptance: a chosen sensor changes the matrix face.
 
 ---
@@ -50,20 +50,20 @@ Tasks:
 
 - [ ] **V1.1 Desktop shell:** Electron window on Windows that opens the 3D page.
   - Acceptance: starting the app opens the window. Requires Node.js on the laptop.
-- [ ] **V1.2 3D scene:** the UNO Q board (low-poly) in the middle, orbit camera, simple lighting.
+- [x] **V1.2 3D scene:** the UNO Q board (low-poly) in the middle, orbit camera, simple lighting. (Implemented in `client/index.html`)
   - Acceptance: runs smoothly on the laptop.
-- [ ] **V2.1 Sensor objects:** each sensor is a 3D object placed in orbit around the board.
-- [ ] **V2.2 Add and remove sensors:** buttons add or remove sensors with a short animation.
+- [x] **V2.1 Sensor objects:** each sensor is a 3D object placed in orbit around the board. (Implemented in `client/index.html`)
+- [x] **V2.2 Add and remove sensors:** buttons add or remove sensors with a short animation. (Implemented in `client/index.html`)
   - Acceptance: adding and removing works without restarting.
-- [ ] **V2.3 Live connection lines:** a line from each sensor to the board, with pulses when data arrives.
-- [ ] **V2.4 Sensor panel:** latest values for the selected sensor.
-- [ ] **V3.1 Phone view:** the laptop app serves the same page on the local network. The phone opens it using the address shown in the app.
+- [x] **V2.3 Live connection lines:** a line from each sensor to the board, with pulses when data arrives. (Implemented in `client/index.html`)
+- [x] **V2.4 Sensor panel:** latest values for the selected sensor. (Implemented in `client/index.html`)
+- [x] **V3.1 Phone view:** the laptop app serves the same page on the local network. The phone opens it using the address shown in the app. (Implemented in `server/index.js` and `client/phone.html`)
   - Acceptance: the phone shows the same scene, and it updates when the laptop does.
-- [ ] **V3.2 Phone layout:** touch controls for rotate and zoom, buttons sized for a thumb.
+- [x] **V3.2 Phone layout:** touch controls for rotate and zoom, buttons sized for a thumb. (Implemented in `client/phone.html` and `client/index.html`)
   - Acceptance: works at phone width with no horizontal scrolling.
 - [ ] **V4.1 Packaging:** Windows installer or portable build.
 - [ ] **V4.2 Native phone app (later, only if the browser view falls short).**
-- [ ] **V5.1 Look:** colors, low-poly board model, sensor icons.
+- [x] **V5.1 Look:** colors, low-poly board model, sensor icons. (Implemented in `client/index.html`)
 
 ---
 

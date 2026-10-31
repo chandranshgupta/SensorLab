@@ -1,0 +1,5 @@
+name: "SensorLab Board Bridge"
+description: "Arduino UNO Q telemetry bridge and LED matrix visualizer for SensorLab"
+icon: 🌐
+ports:
+  - 8080

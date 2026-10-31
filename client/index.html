@@ -176,28 +176,37 @@
     </header>
 
     <div class="panel">
-      <div class="panel-title">Active Sensor Sources</div>
+      <div class="panel-title">Active Sensor Sources (V2.2)</div>
       <div id="sourceList" style="display: flex; flex-direction: column; gap: 0.6rem;">
         <div class="sensor-item sim">
           <div>
             <div class="sensor-name">Software Simulator</div>
             <div class="sensor-sub">Synthetic Drone Waveform</div>
           </div>
-          <span class="badge" id="simBadge">Standby</span>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span class="badge" id="simBadge">Standby</span>
+            <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="toggleSensor('sim')">Toggle</button>
+          </div>
         </div>
         <div class="sensor-item phone">
           <div>
             <div class="sensor-name">Mobile Phone</div>
             <div class="sensor-sub">Orientation & Accelerometer</div>
           </div>
-          <span class="badge" id="phoneBadge">Waiting</span>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span class="badge" id="phoneBadge">Waiting</span>
+            <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="toggleSensor('phone')">Toggle</button>
+          </div>
         </div>
         <div class="sensor-item board">
           <div>
             <div class="sensor-name">Arduino UNO Q</div>
             <div class="sensor-sub">Hardware Board & LED Matrix</div>
           </div>
-          <span class="badge" id="boardBadge">Offline</span>
+          <div style="display: flex; align-items: center; gap: 0.4rem;">
+            <span class="badge" id="boardBadge">Offline</span>
+            <button class="btn" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;" onclick="toggleSensor('board')">Toggle</button>
+          </div>
         </div>
       </div>
     </div>
@@ -330,8 +339,21 @@
       scene.add(line);
 
       scene.add(group);
-      return { group, mesh, line, lastPulse: 0 };
+      return { group, mesh, line, lastPulse: 0, active: true, scale: 1.0, targetScale: 1.0 };
     }
+
+    // V2.2: Dynamically add or remove sensor objects with smooth animation
+    window.toggleSensor = function(type) {
+      const node = sensorNodes[type];
+      if (!node) return;
+      node.active = !node.active;
+      node.targetScale = node.active ? 1.0 : 0.001;
+      const badge = document.getElementById(type + 'Badge');
+      if (badge) {
+        badge.textContent = node.active ? 'Active' : 'Disabled';
+        badge.style.background = node.active ? '#21262d' : '#30363d';
+      }
+    };
 
     // Camera Orbit drag interaction
     let isDragging = false;
@@ -513,9 +535,14 @@
         positions[5] = boardGroup.position.z;
         node.line.geometry.attributes.position.needsUpdate = true;
 
+        // Scale interpolation for smooth add/remove animation (V2.2)
+        node.scale += (node.targetScale - node.scale) * 0.12;
+        node.group.scale.setScalar(node.scale);
+        node.line.visible = node.scale > 0.05;
+
         // Pulse intensity decay
         const elapsedSincePulse = now - node.lastPulse;
-        if (elapsedSincePulse < 500) {
+        if (elapsedSincePulse < 500 && node.scale > 0.5) {
           const pulseFactor = 1 - (elapsedSincePulse / 500);
           node.line.material.opacity = 0.25 + pulseFactor * 0.75;
           node.mesh.scale.setScalar(1 + pulseFactor * 0.4);
